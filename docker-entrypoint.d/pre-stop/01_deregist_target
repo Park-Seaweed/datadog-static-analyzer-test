@@ -1,0 +1,30 @@
+#!/bin/bash
+
+deregister_targets() {
+	aws elbv2 deregister-targets \
+	--target-group-arn $TG_ARN \
+	--targets Id=$TG_IP,Port=$SVC_PORT,AvailabilityZone=$1
+	sleep 30
+
+}
+
+if [ -e /opt/ecs/common/host_ip ]; then
+	TG_IP=`cat /opt/ecs/common/host_ip`
+fi
+
+if [ -n "$ECS_CONTAINER_METADATA_URI_V4" ] && [ -n "$TG_ARN" ] && [ -n "$TG_IP" ]; then
+	SVC_PORT=`(curl -s $ECS_CONTAINER_METADATA_URI_V4 | jq .Ports[0].HostPort)`
+
+
+	if [ ! -e /opt/ec2/az ]; then
+		echo "File does not exist. Applying all zones."
+		deregister_targets "all"
+	elif [ ! -s /opt/ec2/az ]; then
+		echo "File exists but is empty. Applying all zones."
+		deregister_targets "all"
+	else
+		AZ_VALUE=`cat /opt/ec2/az`
+		echo "File exists and has value. Applying given zone: $AZ_VALUE."
+		deregister_targets $AZ_VALUE
+	fi
+fi
